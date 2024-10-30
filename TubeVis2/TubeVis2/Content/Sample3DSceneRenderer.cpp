@@ -4,6 +4,7 @@
 #include "..\Common\DirectXHelper.h"
 #include <ppltasks.h>
 #include <synchapi.h>
+using namespace Windows::UI::Core;
 
 using namespace TubeVis2;
 
@@ -299,6 +300,14 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 	createAssetsTask.then([this]() {
 		m_loadingComplete = true;
 	});
+
+	//Input defines:
+
+	m_keyboard = std::make_unique<Keyboard>();
+	m_keyboard->SetWindow(CoreWindow::GetForCurrentThread());
+
+	m_mouse = std::make_unique<Mouse>();
+	m_mouse->SetWindow(CoreWindow::GetForCurrentThread());
 }
 
 // Initialisiert Anzeigeparameter, wenn sich die Fenstergröße ändert.
@@ -342,10 +351,12 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 
 	// Das Auge befindet sich bei (0,0.7,1.5) und betrachtet Punkt (0,-0.1,0) mit dem Up-Vektor entlang der Y-Achse.
 	static const XMVECTORF32 eye = { 0.0f, 0.7f, 1.5f, 0.0f };
-	static const XMVECTORF32 at = { 0.0f, -0.1f, 0.0f, 0.0f };
+	static const XMVECTORF32 at = { 0.0f, -0.1f, 0.5f, 0.0f };
 	static const XMVECTORF32 up = { 0.0f, 1.0f, 0.0f, 0.0f };
 
 	XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(eye, at, up)));
+
+	
 }
 
 // Wird einmal pro Frame aufgerufen, dreht den Würfel und berechnet das Modell und die Anzeigematrizen.
@@ -356,7 +367,24 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 		if (!m_tracking)
 		{
 			// Den Würfel nur gering drehen.
+			
 			m_angle += static_cast<float>(timer.GetElapsedSeconds()) * m_radiansPerSecond;
+
+			// Get Input
+			float horizntalVector = 
+			auto kb = m_keyboard->GetState();
+			if (kb.A)
+			{
+				
+			}
+
+			static const XMVECTORF32 eye = { 0.0f, 0.7f, 1.5f, 0.0f };
+			static const XMVECTORF32 at = { 0.0f, -0.1f, 0.5f, 0.0f };
+			static const XMVECTORF32 up = { 0.0f, 1.0f, 0.0f, 0.0f };
+
+			XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(eye, at, up)));
+
+			auto mouse = m_mouse->GetState();
 
 			Rotate(m_angle);
 		}

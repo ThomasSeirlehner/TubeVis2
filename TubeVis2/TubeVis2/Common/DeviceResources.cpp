@@ -17,7 +17,7 @@ namespace DisplayMetrics
 	// für Spiele das Rendern mit 60 BpS und in voller Qualität versucht wird.
 	// Die Entscheidung für das Rendern in voller Qualität auf allen Plattformen und für alle Formfaktoren
 	// sollte wohlüberlegt sein.
-	static const bool SupportHighResolutions = false;
+	static const bool SupportHighResolutions = true;
 
 	// Die Standardschwellenwerte, die eine "hohe Auflösung" für die Anzeige definieren. Wenn die Schwellenwerte
 	// überschritten werden und "SupportHighResolutions" den Wert "false" aufweist, werden die Dimensionen um

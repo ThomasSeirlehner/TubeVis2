@@ -222,6 +222,7 @@ std::shared_ptr<DX::DeviceResources> App::GetDeviceResources()
 	{
 		m_deviceResources = std::make_shared<DX::DeviceResources>();
 		m_deviceResources->SetWindow(CoreWindow::GetForCurrentThread());
+		
 		m_main->CreateRenderers(m_deviceResources);
 	}
 	return m_deviceResources;

@@ -1,8 +1,12 @@
 ﻿#pragma once
+#pragma comment (lib, "dinput8.lib")
 
 #include "..\Common\DeviceResources.h"
 #include "ShaderStructures.h"
 #include "..\Common\StepTimer.h"
+#include <dinput.h>
+#include <Keyboard.h>
+#include <Mouse.h>
 
 namespace TubeVis2
 {
@@ -56,6 +60,11 @@ namespace TubeVis2
 		float	m_radiansPerSecond;
 		float	m_angle;
 		bool	m_tracking;
+
+		//Inputs:
+		std::unique_ptr<DirectX::Keyboard> m_keyboard;
+		std::unique_ptr<DirectX::Mouse> m_mouse;
+
 	};
 }
 
