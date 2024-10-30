@@ -30,6 +30,8 @@ namespace TubeVis2
 	private:
 		void LoadState();
 		void Rotate(float radians);
+		void crossProduct(float v_A[], float v_B[], float c_P[]);
+		void normalize(float v_A[]);
 
 	private:
 		// Konstantenpuffer müssen eine 256-Byte-Ausrichtung aufweisen.
@@ -64,6 +66,15 @@ namespace TubeVis2
 		//Inputs:
 		std::unique_ptr<DirectX::Keyboard> m_keyboard;
 		std::unique_ptr<DirectX::Mouse> m_mouse;
+
+		float m_pitch;
+		float m_yaw;
+
+		
+
+		const float ROTATION_GAIN = 0.004f;
+		const float MOVEMENT_GAIN = 0.07f;
+
 
 	};
 }

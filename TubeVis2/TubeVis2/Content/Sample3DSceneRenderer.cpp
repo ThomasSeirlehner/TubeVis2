@@ -1,9 +1,15 @@
-﻿#include "pch.h"
+﻿#define NOMINMAX
+
+#include "pch.h"
 #include "Sample3DSceneRenderer.h"
 
 #include "..\Common\DirectXHelper.h"
 #include <ppltasks.h>
 #include <synchapi.h>
+using namespace std;
+
+
+
 using namespace Windows::UI::Core;
 
 using namespace TubeVis2;
@@ -17,6 +23,10 @@ using namespace Windows::Storage;
 // Indizes in die Anwendungsstatuszuweisung.
 Platform::String^ AngleKey = "Angle";
 Platform::String^ TrackingKey = "Tracking";
+
+XMVECTORF32 playerPosition;
+XMVECTORF32 lookAt;
+XMVECTORF32 up;
 
 // Lädt den Scheitelpunkt und die Pixel-Shader aus den Dateien und instanziiert die Würfelgeometrie.
 Sample3DSceneRenderer::Sample3DSceneRenderer(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
@@ -66,17 +76,17 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		ComPtr<ID3DBlob> pError;
 		DX::ThrowIfFailed(D3D12SerializeRootSignature(&descRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, pSignature.GetAddressOf(), pError.GetAddressOf()));
 		DX::ThrowIfFailed(d3dDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
-        NAME_D3D12_OBJECT(m_rootSignature);
+		NAME_D3D12_OBJECT(m_rootSignature);
 	}
 
 	// Shader asynchron laden.
 	auto createVSTask = DX::ReadDataAsync(L"SampleVertexShader.cso").then([this](std::vector<byte>& fileData) {
 		m_vertexShader = fileData;
-	});
+		});
 
 	auto createPSTask = DX::ReadDataAsync(L"SamplePixelShader.cso").then([this](std::vector<byte>& fileData) {
 		m_pixelShader = fileData;
-	});
+		});
 
 	// Pipelinezustand erstellen, sobald die Shader geladen wurden.
 	auto createPipelineStateTask = (createPSTask && createVSTask).then([this]() {
@@ -90,8 +100,8 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC state = {};
 		state.InputLayout = { inputLayout, _countof(inputLayout) };
 		state.pRootSignature = m_rootSignature.Get();
-        state.VS = CD3DX12_SHADER_BYTECODE(&m_vertexShader[0], m_vertexShader.size());
-        state.PS = CD3DX12_SHADER_BYTECODE(&m_pixelShader[0], m_pixelShader.size());
+		state.VS = CD3DX12_SHADER_BYTECODE(&m_vertexShader[0], m_vertexShader.size());
+		state.PS = CD3DX12_SHADER_BYTECODE(&m_pixelShader[0], m_pixelShader.size());
 		state.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		state.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		state.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
@@ -107,7 +117,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		// Shaderdaten können gelöscht werden, nachdem der Pipelinestatus erstellt wurde.
 		m_vertexShader.clear();
 		m_pixelShader.clear();
-	});
+		});
 
 	// Würfelgeometrieressourcen erstellen und in die GPU hochladen.
 	auto createAssetsTask = createPipelineStateTask.then([this]() {
@@ -115,7 +125,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 		// Erstellt eine Befehlsliste.
 		DX::ThrowIfFailed(d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_deviceResources->GetCommandAllocator(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
-        NAME_D3D12_OBJECT(m_commandList);
+		NAME_D3D12_OBJECT(m_commandList);
 
 		// Würfelscheitelpunkte. Jeder Scheitelpunkt hat eine Position und eine Farbe.
 		VertexPositionColor cubeVertices[] =
@@ -155,7 +165,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			nullptr,
 			IID_PPV_ARGS(&vertexBufferUpload)));
 
-        NAME_D3D12_OBJECT(m_vertexBuffer);
+		NAME_D3D12_OBJECT(m_vertexBuffer);
 
 		// Vertexpuffer in die GPU hochladen.
 		{
@@ -243,7 +253,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 			DX::ThrowIfFailed(d3dDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_cbvHeap)));
 
-            NAME_D3D12_OBJECT(m_cbvHeap);
+			NAME_D3D12_OBJECT(m_cbvHeap);
 		}
 
 		CD3DX12_RESOURCE_DESC constantBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(DX::c_frameCount * c_alignedConstantBufferSize);
@@ -255,7 +265,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			nullptr,
 			IID_PPV_ARGS(&m_constantBuffer)));
 
-        NAME_D3D12_OBJECT(m_constantBuffer);
+		NAME_D3D12_OBJECT(m_constantBuffer);
 
 		// Erstellt Konstantenpufferansichten für den Zugriff auf den Uploadpuffer.
 		D3D12_GPU_VIRTUAL_ADDRESS cbvGpuAddress = m_constantBuffer->GetGPUVirtualAddress();
@@ -295,11 +305,11 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 		// Auf das Beenden der Ausführung der Befehlsliste warten. Die Vertex-/Indexpuffer müssen in die GPU hochgeladen werden, bevor die Uploadressourcen den Bereich überschreiten.
 		m_deviceResources->WaitForGpu();
-	});
+		});
 
 	createAssetsTask.then([this]() {
 		m_loadingComplete = true;
-	});
+		});
 
 	//Input defines:
 
@@ -308,6 +318,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 	m_mouse = std::make_unique<Mouse>();
 	m_mouse->SetWindow(CoreWindow::GetForCurrentThread());
+	m_mouse->SetMode(Mouse::MODE_RELATIVE);
+	m_pitch = 0.5;
+	m_yaw = 0;
+	playerPosition = { 0.0f, 0.7f, 1.5f, 0.0f };
 }
 
 // Initialisiert Anzeigeparameter, wenn sich die Fenstergröße ändert.
@@ -318,7 +332,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 	float fovAngleY = 70.0f * XM_PI / 180.0f;
 
 	D3D12_VIEWPORT viewport = m_deviceResources->GetScreenViewport();
-	m_scissorRect = { 0, 0, static_cast<LONG>(viewport.Width), static_cast<LONG>(viewport.Height)};
+	m_scissorRect = { 0, 0, static_cast<LONG>(viewport.Width), static_cast<LONG>(viewport.Height) };
 
 	// Dies ist ein einfaches Beispiel für eine Änderung, die vorgenommen werden kann, wenn die App im
 	// Hochformat oder angedockte Ansicht.
@@ -339,7 +353,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 		aspectRatio,
 		0.01f,
 		100.0f
-		);
+	);
 
 	XMFLOAT4X4 orientation = m_deviceResources->GetOrientationTransform3D();
 	XMMATRIX orientationMatrix = XMLoadFloat4x4(&orientation);
@@ -347,7 +361,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 	XMStoreFloat4x4(
 		&m_constantBufferData.projection,
 		XMMatrixTranspose(perspectiveMatrix * orientationMatrix)
-		);
+	);
 
 	// Das Auge befindet sich bei (0,0.7,1.5) und betrachtet Punkt (0,-0.1,0) mit dem Up-Vektor entlang der Y-Achse.
 	static const XMVECTORF32 eye = { 0.0f, 0.7f, 1.5f, 0.0f };
@@ -356,7 +370,7 @@ void Sample3DSceneRenderer::CreateWindowSizeDependentResources()
 
 	XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(eye, at, up)));
 
-	
+
 }
 
 // Wird einmal pro Frame aufgerufen, dreht den Würfel und berechnet das Modell und die Anzeigematrizen.
@@ -367,24 +381,93 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 		if (!m_tracking)
 		{
 			// Den Würfel nur gering drehen.
-			
-			m_angle += static_cast<float>(timer.GetElapsedSeconds()) * m_radiansPerSecond;
+
+			//m_angle += static_cast<float>(timer.GetElapsedSeconds()) * m_radiansPerSecond;
 
 			// Get Input
-			float horizntalVector = 
-			auto kb = m_keyboard->GetState();
-			if (kb.A)
-			{
-				
-			}
+			
 
-			static const XMVECTORF32 eye = { 0.0f, 0.7f, 1.5f, 0.0f };
-			static const XMVECTORF32 at = { 0.0f, -0.1f, 0.5f, 0.0f };
-			static const XMVECTORF32 up = { 0.0f, 1.0f, 0.0f, 0.0f };
 
-			XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(eye, at, up)));
 
 			auto mouse = m_mouse->GetState();
+
+			if (mouse.positionMode == Mouse::MODE_RELATIVE)
+			{
+				XMVECTORF32 delta = { float(mouse.y), float(mouse.x), 0.f };
+
+				m_pitch -= delta[0] * ROTATION_GAIN;
+
+				m_yaw -= delta[1] * ROTATION_GAIN;
+			}
+
+			// limit pitch to straight up or straight down
+			constexpr float limit = XM_PIDIV2 - 0.01f;
+			m_pitch = max(-limit, m_pitch);
+			m_pitch = min(+limit, m_pitch);
+
+			// keep longitude in sane range by wrapping
+			if (m_yaw > XM_PI)
+			{
+				m_yaw -= XM_2PI;
+			}
+			else if (m_yaw < -XM_PI)
+			{
+				m_yaw += XM_2PI;
+			}
+
+
+			float y = sinf(m_pitch);
+			float r = cosf(m_pitch);
+			float z = r * cosf(m_yaw);
+			float x = r * sinf(m_yaw);
+
+			lookAt = { playerPosition[0] + x, playerPosition[1] + y, playerPosition[2] + z, 0.0f };
+			up = { 0.0f, 1.0f, 0.0f, 0.0f };
+
+			XMVECTORF32 move = { 0,0,0 };
+			auto kb = m_keyboard->GetState();
+			if (kb.Up || kb.W)
+			{
+				move = { move[0], move[1] - MOVEMENT_GAIN, move[2] };
+			}
+			if (kb.Down || kb.S)
+			{
+				move = { move[0], move[1] + MOVEMENT_GAIN, move[2] };
+			}
+			if (kb.Left || kb.A)
+			{
+				move = { move[0] + MOVEMENT_GAIN, move[1], move[2] };
+			}
+			if (kb.Right || kb.D)
+			{
+				move = { move[0] - MOVEMENT_GAIN, move[1], move[2] };
+			}
+			if (kb.PageUp || kb.Space)
+			{
+				move = { move[0], move[1], move[2] + MOVEMENT_GAIN };
+			}
+			if (kb.PageDown || kb.X)
+			{
+				move = { move[0], move[1], move[2] - MOVEMENT_GAIN };
+			}
+
+			float bufferUp[] = { 0, 1.0, 0 };
+			float bufferFront[] = { x, y, z };
+			float bufferResult[] = { 0,0,0 };
+			crossProduct(bufferFront, bufferUp, bufferResult);
+			normalize(bufferResult);
+
+			playerPosition = { playerPosition[0] - x * move[1], playerPosition[1] - y * move[1], playerPosition[2] - z * move[1], 0.0f };
+			playerPosition = { playerPosition[0] - bufferResult[0] * move[0], playerPosition[1] - bufferResult[1] * move[0], playerPosition[2] - bufferResult[2] * move[0], 0.0f };
+
+
+
+
+			
+
+			XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(playerPosition, lookAt, up)));
+
+
 
 			Rotate(m_angle);
 		}
@@ -393,6 +476,19 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 		UINT8* destination = m_mappedConstantBuffer + (m_deviceResources->GetCurrentFrameIndex() * c_alignedConstantBufferSize);
 		memcpy(destination, &m_constantBufferData, sizeof(m_constantBufferData));
 	}
+}
+
+void  TubeVis2::Sample3DSceneRenderer::crossProduct(float v_A[], float v_B[], float c_P[]) {
+	c_P[0] = v_A[0] * v_B[2] - v_A[2] * v_B[1];
+	c_P[1] = -(v_A[0] * v_B[2] - v_A[2] * v_B[0]);
+	c_P[2] = v_A[0] * v_B[1] - v_A[1] * v_B[0];
+}
+
+void  TubeVis2::Sample3DSceneRenderer::normalize(float v_A[]) {
+	float length = sqrt(pow(v_A[0], 2) + pow(v_A[1], 2) + pow(v_A[2], 2));
+	v_A[0] = v_A[0] / length;
+	v_A[1] = v_A[1] / length;
+	v_A[2] = v_A[2] / length;
 }
 
 // Speichert den aktuellen Zustand des Renderers.
