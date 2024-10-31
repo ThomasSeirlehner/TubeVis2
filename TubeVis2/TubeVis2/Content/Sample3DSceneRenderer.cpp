@@ -421,8 +421,7 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 			float z = r * cosf(m_yaw);
 			float x = r * sinf(m_yaw);
 
-			lookAt = { playerPosition[0] + x, playerPosition[1] + y, playerPosition[2] + z, 0.0f };
-			up = { 0.0f, 1.0f, 0.0f, 0.0f };
+			
 
 			XMVECTORF32 move = { 0,0,0 };
 			auto kb = m_keyboard->GetState();
@@ -442,25 +441,28 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 			{
 				move = { move[0] - MOVEMENT_GAIN, move[1], move[2] };
 			}
-			if (kb.PageUp || kb.Space)
+			if (kb.PageUp || kb.E)
 			{
 				move = { move[0], move[1], move[2] + MOVEMENT_GAIN };
 			}
-			if (kb.PageDown || kb.X)
+			if (kb.PageDown || kb.Q)
 			{
 				move = { move[0], move[1], move[2] - MOVEMENT_GAIN };
 			}
 
+
 			float bufferUp[] = { 0, 1.0, 0 };
 			float bufferFront[] = { x, y, z };
-			float bufferResult[] = { 0,0,0 };
+			float bufferResult[] = { 1.0,0,0 };
 			crossProduct(bufferFront, bufferUp, bufferResult);
 			normalize(bufferResult);
 
 			playerPosition = { playerPosition[0] - x * move[1], playerPosition[1] - y * move[1], playerPosition[2] - z * move[1], 0.0f };
 			playerPosition = { playerPosition[0] - bufferResult[0] * move[0], playerPosition[1] - bufferResult[1] * move[0], playerPosition[2] - bufferResult[2] * move[0], 0.0f };
+			playerPosition = { playerPosition[0], playerPosition[1] + move[2], playerPosition[2], 0.0f };
 
-
+			lookAt = { playerPosition[0] + x, playerPosition[1] + y, playerPosition[2] + z, 0.0f };
+			up = { 0.0f, 1.0f, 0.0f, 0.0f };
 
 
 			
