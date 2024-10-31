@@ -391,6 +391,13 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 
 			auto mouse = m_mouse->GetState();
 
+			if (mouse.rightButton) {
+				m_mouse->SetMode(Mouse::MODE_RELATIVE);
+			}
+			else {
+				m_mouse->SetMode(Mouse::MODE_ABSOLUTE);
+			}
+
 			if (mouse.positionMode == Mouse::MODE_RELATIVE)
 			{
 				XMVECTORF32 delta = { float(mouse.y), float(mouse.x), 0.f };
@@ -415,16 +422,14 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 				m_yaw += XM_2PI;
 			}
 
-
 			float y = sinf(m_pitch);
 			float r = cosf(m_pitch);
 			float z = r * cosf(m_yaw);
 			float x = r * sinf(m_yaw);
 
-			
-
 			XMVECTORF32 move = { 0,0,0 };
 			auto kb = m_keyboard->GetState();
+
 			if (kb.Up || kb.W)
 			{
 				move = { move[0], move[1] - MOVEMENT_GAIN, move[2] };
