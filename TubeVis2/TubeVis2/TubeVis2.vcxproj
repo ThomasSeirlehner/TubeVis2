@@ -274,6 +274,7 @@
     </AppxManifest>
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="Content\ComputeShader.hlsl" />
     <FxCompile Include="Content\SamplePixelShader.hlsl">
       <ShaderType>Pixel</ShaderType>
     </FxCompile>

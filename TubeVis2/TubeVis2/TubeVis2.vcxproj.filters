@@ -79,4 +79,9 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Content\ComputeShader.hlsl">
+      <Filter>Inhalt</Filter>
+    </FxCompile>
+  </ItemGroup>
 </Project>

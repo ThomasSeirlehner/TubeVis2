@@ -80,6 +80,10 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 	}
 
 	// Shader asynchron laden.
+	auto createCSTask = DX::ReadDataAsync(L"ComputeShader.cso").then([this](std::vector<byte>& fileData) {
+		m_computeShader = fileData;
+		});
+
 	auto createVSTask = DX::ReadDataAsync(L"SampleVertexShader.cso").then([this](std::vector<byte>& fileData) {
 		m_vertexShader = fileData;
 		});
@@ -97,6 +101,13 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
+		D3D12_COMPUTE_PIPELINE_STATE_DESC cState = {};
+		cState.pRootSignature = m_rootSignature.Get();
+		cState.CS = CD3DX12_SHADER_BYTECODE(&m_computeShader[0], m_computeShader.size());
+		cState.NodeMask = UINT_MAX;
+		cState.CachedPSO = m_cachedPSO;
+		cState.Flags = m_flags;
+
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC state = {};
 		state.InputLayout = { inputLayout, _countof(inputLayout) };
 		state.pRootSignature = m_rootSignature.Get();
@@ -112,6 +123,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		state.DSVFormat = m_deviceResources->GetDepthBufferFormat();
 		state.SampleDesc.Count = 1;
 
+		DX::ThrowIfFailed(m_deviceResources->GetD3DDevice()->CreateComputePipelineState(&cState, IID_PPV_ARGS(&m_pipelineState)));
 		DX::ThrowIfFailed(m_deviceResources->GetD3DDevice()->CreateGraphicsPipelineState(&state, IID_PPV_ARGS(&m_pipelineState)));
 
 		// Shaderdaten können gelöscht werden, nachdem der Pipelinestatus erstellt wurde.

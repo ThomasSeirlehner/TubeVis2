@@ -52,10 +52,13 @@ namespace TubeVis2
 		UINT8*												m_mappedConstantBuffer;
 		UINT												m_cbvDescriptorSize;
 		D3D12_RECT											m_scissorRect;
+		std::vector<byte>									m_computeShader;
 		std::vector<byte>									m_vertexShader;
 		std::vector<byte>									m_pixelShader;
 		D3D12_VERTEX_BUFFER_VIEW							m_vertexBufferView;
 		D3D12_INDEX_BUFFER_VIEW								m_indexBufferView;
+		D3D12_CACHED_PIPELINE_STATE							m_cachedPSO;
+		D3D12_PIPELINE_STATE_FLAGS							m_flags;
 
 		// Für die Renderschleife verwendete Variablen.
 		bool	m_loadingComplete;
