@@ -79,6 +79,25 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		NAME_D3D12_OBJECT(m_rootSignature);
 	}
 
+	// compute pipeline root signature
+	{
+		// 1. Define the root parameters
+		CD3DX12_ROOT_PARAMETER rootParameters;
+		CD3DX12_DESCRIPTOR_RANGE uavRange;
+		uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		rootParameters.InitAsDescriptorTable(1, &uavRange, D3D12_SHADER_VISIBILITY_ALL);
+
+		// 2. Create the root signature description
+		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init(1, &rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		ComPtr<ID3DBlob> pSignature;
+		ComPtr<ID3DBlob> pError;
+		DX::ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, pSignature.GetAddressOf(), pError.GetAddressOf()));
+		DX::ThrowIfFailed(d3dDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), IID_PPV_ARGS(&m_computeRootSignature)));
+		NAME_D3D12_OBJECT(m_computeRootSignature);
+	}
+
 	// Shader asynchron laden.
 	auto createCSTask = DX::ReadDataAsync(L"ComputeShader.cso").then([this](std::vector<byte>& fileData) {
 		m_computeShader = fileData;
@@ -93,7 +112,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		});
 
 	// Pipelinezustand erstellen, sobald die Shader geladen wurden.
-	auto createPipelineStateTask = (createPSTask && createVSTask).then([this]() {
+	auto createPipelineStateTask = (createPSTask && createVSTask && createCSTask).then([this]() {
 
 		static const D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 		{
@@ -101,12 +120,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		D3D12_COMPUTE_PIPELINE_STATE_DESC cState = {};
-		cState.pRootSignature = m_rootSignature.Get();
-		cState.CS = CD3DX12_SHADER_BYTECODE(&m_computeShader[0], m_computeShader.size());
-		cState.NodeMask = UINT_MAX;
-		cState.CachedPSO = m_cachedPSO;
-		cState.Flags = m_flags;
+
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC state = {};
 		state.InputLayout = { inputLayout, _countof(inputLayout) };
@@ -123,12 +137,22 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		state.DSVFormat = m_deviceResources->GetDepthBufferFormat();
 		state.SampleDesc.Count = 1;
 
-		DX::ThrowIfFailed(m_deviceResources->GetD3DDevice()->CreateComputePipelineState(&cState, IID_PPV_ARGS(&m_pipelineState)));
 		DX::ThrowIfFailed(m_deviceResources->GetD3DDevice()->CreateGraphicsPipelineState(&state, IID_PPV_ARGS(&m_pipelineState)));
+
+		D3D12_COMPUTE_PIPELINE_STATE_DESC cState = {};
+		cState.pRootSignature = m_computeRootSignature.Get();
+		cState.CS = CD3DX12_SHADER_BYTECODE(&m_computeShader[0], m_computeShader.size());
+		cState.NodeMask = 0;
+		//cState.CachedPSO = m_cachedPSO;
+		//cState.Flags = m_flags;
+
+		DX::ThrowIfFailed(m_deviceResources->GetD3DDevice()->CreateComputePipelineState(&cState, IID_PPV_ARGS(&m_computePipelineState)));
+
 
 		// Shaderdaten können gelöscht werden, nachdem der Pipelinestatus erstellt wurde.
 		m_vertexShader.clear();
 		m_pixelShader.clear();
+		m_computeShader.clear();
 		});
 
 	// Würfelgeometrieressourcen erstellen und in die GPU hochladen.
@@ -397,7 +421,7 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 			//m_angle += static_cast<float>(timer.GetElapsedSeconds()) * m_radiansPerSecond;
 
 			// Get Input
-			
+
 
 
 
@@ -482,7 +506,7 @@ void Sample3DSceneRenderer::Update(DX::StepTimer const& timer)
 			up = { 0.0f, 1.0f, 0.0f, 0.0f };
 
 
-			
+
 
 			XMStoreFloat4x4(&m_constantBufferData.view, XMMatrixTranspose(XMMatrixLookAtRH(playerPosition, lookAt, up)));
 
