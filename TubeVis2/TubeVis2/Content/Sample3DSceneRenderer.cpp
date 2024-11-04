@@ -163,6 +163,21 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		DX::ThrowIfFailed(d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_deviceResources->GetCommandAllocator(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 		NAME_D3D12_OBJECT(m_commandList);
 
+		//Compute commandLine
+		ComPtr<ID3D12CommandAllocator> computeCommandAllocator;
+		DX::ThrowIfFailed(d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&computeCommandAllocator)));
+		DX::ThrowIfFailed(d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, computeCommandAllocator.Get(), m_computePipelineState.Get(), IID_PPV_ARGS(&m_computeCommandList)));
+		NAME_D3D12_OBJECT(m_computeCommandList);
+
+		//Compute Shader set
+		{
+			m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
+			m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
+			m_computeCommandList->Dispatch(8, 8, 1);
+		}
+
+		//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 		// Würfelscheitelpunkte. Jeder Scheitelpunkt hat eine Position und eine Farbe.
 		VertexPositionColor cubeVertices[] =
 		{
