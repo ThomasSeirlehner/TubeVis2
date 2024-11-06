@@ -223,7 +223,7 @@
       </ShaderType>
     </FxCompile>
     <FxCompile>
-      <ShaderModel>6.6</ShaderModel>
+      <ShaderModel>5.1</ShaderModel>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

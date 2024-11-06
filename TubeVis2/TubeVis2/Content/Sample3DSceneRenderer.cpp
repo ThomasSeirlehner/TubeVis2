@@ -82,14 +82,15 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 	// compute pipeline root signature
 	{
 		// 1. Define the root parameters
-		CD3DX12_ROOT_PARAMETER rootParameters;
-		CD3DX12_DESCRIPTOR_RANGE uavRange;
-		uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
-		rootParameters.InitAsDescriptorTable(1, &uavRange, D3D12_SHADER_VISIBILITY_ALL);
+		CD3DX12_ROOT_PARAMETER rootParameters[2];
+		//CD3DX12_DESCRIPTOR_RANGE uavRange;
+		//uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		rootParameters[0].InitAsUnorderedAccessView(0);
+		rootParameters[1].InitAsConstants(4, 0);
 
 		// 2. Create the root signature description
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init(1, &rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		rootSignatureDesc.Init(_countof(rootParameters), rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		ComPtr<ID3DBlob> pSignature;
 		ComPtr<ID3DBlob> pError;
