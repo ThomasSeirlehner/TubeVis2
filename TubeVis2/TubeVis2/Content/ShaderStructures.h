@@ -17,7 +17,7 @@ namespace TubeVis2
 		DirectX::XMFLOAT3 color;
 	};
 
-	struct matrices_and_user_input {
+	/*struct matrices_and_user_input {
 		/// <summary>
 		/// The view matrix given by the quake cam
 		/// </summary>
@@ -68,7 +68,7 @@ namespace TubeVis2
 		/// r ... ambient light factor
 		/// g ... diffuse light factor
 		/// b ... specular light factor
-		/// a ... shininess 
+		/// a ... shininess
 		/// </summary>
 		DirectX::XMFLOAT4 mMaterialLightReponse; // vec4(0.5, 1.0, 0.5, 32.0);  // amb, diff, spec, shininess
 
@@ -133,10 +133,17 @@ namespace TubeVis2
 		/// </summary>
 		float mDataMaxLineLength;
 		/// <summary>
-		/// The maximum line length of adjacing lines to a vertex inside the dataset. 
+		/// The maximum line length of adjacing lines to a vertex inside the dataset.
 		/// This value is unused so far but could be used for another dynamic mode
 		/// </summary>
 		float mDataMaxVertexAdjacentLineLength;
 
+	};*/
+
+	struct matrices_and_user_input {
+		/// <summary>
+		/// contains resx, resy and kbuffer levels
+		/// </summary>
+		DirectX::XMFLOAT4 mkBufferInfo;
 	};
 }

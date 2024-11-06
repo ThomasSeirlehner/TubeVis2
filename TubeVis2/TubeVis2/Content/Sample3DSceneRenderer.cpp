@@ -165,17 +165,87 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		NAME_D3D12_OBJECT(m_commandList);
 
 		//Compute commandLine
-		ComPtr<ID3D12CommandAllocator> computeCommandAllocator;
-		DX::ThrowIfFailed(d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&computeCommandAllocator)));
-		DX::ThrowIfFailed(d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, computeCommandAllocator.Get(), m_computePipelineState.Get(), IID_PPV_ARGS(&m_computeCommandList)));
+		DX::ThrowIfFailed(d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_computeCommandAllocator)));
+		DX::ThrowIfFailed(d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_computeCommandAllocator.Get(), m_computePipelineState.Get(), IID_PPV_ARGS(&m_computeCommandList)));
 		NAME_D3D12_OBJECT(m_computeCommandList);
 
-		//Compute Shader set
+		//new mkBuffer
+
+		// Calculate buffer size
+		Size outputSize = m_deviceResources->GetOutputSize();
+		const UINT64 kBufferSize = outputSize.Width * outputSize.Height * 16 * sizeof(uint64_t);
+
+		// Describe and create a committed resource for the buffer
+		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(kBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+		
+		HRESULT hr = d3dDevice->CreateCommittedResource(
+			&heapProps,
+			D3D12_HEAP_FLAG_NONE,
+			&bufferDesc,
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			nullptr,
+			IID_PPV_ARGS(&m_mkBuffer)
+		);
+		if (FAILED(hr))
 		{
-			m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
-			m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
-			m_computeCommandList->Dispatch(8, 8, 1);
+			// Handle error
 		}
+
+		
+		const UINT constantBufferSize = (sizeof(matrices_and_user_input) + 255) & ~255; // Round up to nearest 256 bytes
+
+		D3D12_HEAP_PROPERTIES heapPropsUp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		D3D12_RESOURCE_DESC bufferDescUP = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
+
+		// Create the constant buffer
+
+		hr = d3dDevice->CreateCommittedResource(
+			&heapPropsUp,
+			D3D12_HEAP_FLAG_NONE,
+			&bufferDescUP,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&m_mUniformBuffer)
+		);
+
+		if (FAILED(hr))
+		{
+			// Handle error
+			return;
+		}
+
+		// Create a UAV descriptor for the buffer
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+		uavDesc.Buffer.FirstElement = 0;
+		uavDesc.Buffer.NumElements = static_cast<UINT>(kBufferSize / sizeof(uint32_t));
+		uavDesc.Buffer.StructureByteStride = 0;
+		uavDesc.Buffer.CounterOffsetInBytes = 0;
+		uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+
+		ComPtr<ID3D12DescriptorHeap> uavDescriptorHeap;
+
+		D3D12_DESCRIPTOR_HEAP_DESC uavHeapDesc = {};
+		uavHeapDesc.NumDescriptors = 1; // Adjust this number based on how many UAVs you need
+		uavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		uavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		uavHeapDesc.NodeMask = 0;
+
+		hr = d3dDevice->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&uavDescriptorHeap));
+		if (FAILED(hr))
+		{
+			// Handle error
+		}
+		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = uavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+		d3dDevice->CreateUnorderedAccessView(m_mkBuffer.Get(), nullptr, &uavDesc, uavHandle);
+
+
+		
+
 
 		//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -620,6 +690,42 @@ bool Sample3DSceneRenderer::Render()
 		return false;
 	}
 
+	Size outputSize = m_deviceResources->GetOutputSize();
+
+	//set MatricesAndUserInput
+	matrices_and_user_input uni;
+	uni.mkBufferInfo = XMFLOAT4(outputSize.Width, outputSize.Height, 16, 0);
+	//compute Shader part:
+
+	DX::ThrowIfFailed(m_computeCommandAllocator->Reset());
+
+	DX::ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
+
+	PIXBeginEvent(m_computeCommandList.Get(), 0, L"Draw the cube");
+	{
+		UINT8* pCbvDataBegin;
+		m_mUniformBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pCbvDataBegin));
+		memcpy(pCbvDataBegin, &uni, sizeof(matrices_and_user_input));
+		m_mUniformBuffer->Unmap(0, nullptr);
+
+		m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
+		m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
+
+		m_computeCommandList->SetComputeRootConstantBufferView(0, m_mUniformBuffer->GetGPUVirtualAddress());
+		m_computeCommandList->SetComputeRootUnorderedAccessView(1, m_mkBuffer->GetGPUVirtualAddress());
+
+		// Dispatch the compute shader
+		
+		UINT dispatchX = (outputSize.Width + 15) / 16;
+		UINT dispatchY = (outputSize.Height + 15) / 16;
+		m_computeCommandList->Dispatch(dispatchX, dispatchY, 1);
+	}
+	PIXEndEvent(m_computeCommandList.Get());
+
+	DX::ThrowIfFailed(m_computeCommandList->Close());
+
+	//compute Shader end
+
 	DX::ThrowIfFailed(m_deviceResources->GetCommandAllocator()->Reset());
 
 	// Die Befehlsliste kann jederzeit zurückgesetzt werden, nachdem "ExecuteCommandList()" aufgerufen wurde.
@@ -669,7 +775,7 @@ bool Sample3DSceneRenderer::Render()
 	DX::ThrowIfFailed(m_commandList->Close());
 
 	// Befehlsliste ausführen.
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	ID3D12CommandList* ppCommandLists[] = { m_computeCommandList.Get(),  m_commandList.Get() };
 	m_deviceResources->GetCommandQueue()->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	return true;
