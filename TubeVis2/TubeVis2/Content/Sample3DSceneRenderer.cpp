@@ -178,7 +178,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		// Describe and create a committed resource for the buffer
 		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(kBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-
+		
 		
 		HRESULT hr = d3dDevice->CreateCommittedResource(
 			&heapProps,
@@ -234,19 +234,21 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		uavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		uavHeapDesc.NodeMask = 0;
 
-		hr = d3dDevice->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&uavDescriptorHeap));
-		if (FAILED(hr))
-		{
-			// Handle error
-		}
+		d3dDevice->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&uavDescriptorHeap));
+		
 		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = uavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
 		d3dDevice->CreateUnorderedAccessView(m_mkBuffer.Get(), nullptr, &uavDesc, uavHandle);
 
+		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+		queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 
-		
+		d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_computeCommandQueue));
 
-
+		DX::ThrowIfFailed(m_computeCommandList->Close());
+		ID3D12CommandList* ppComputeCommandLists[] = { m_computeCommandList.Get() };
+		m_computeCommandQueue->ExecuteCommandLists(_countof(ppComputeCommandLists), ppComputeCommandLists);
 		//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 		// Würfelscheitelpunkte. Jeder Scheitelpunkt hat eine Position und eine Farbe.
@@ -700,7 +702,7 @@ bool Sample3DSceneRenderer::Render()
 	DX::ThrowIfFailed(m_computeCommandAllocator->Reset());
 
 	DX::ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
-
+	
 	PIXBeginEvent(m_computeCommandList.Get(), 0, L"Draw the cube");
 	{
 		UINT8* pCbvDataBegin;
@@ -724,8 +726,12 @@ bool Sample3DSceneRenderer::Render()
 
 	DX::ThrowIfFailed(m_computeCommandList->Close());
 
+	ID3D12CommandList* ppComputeCommandLists[] = { m_computeCommandList.Get() };
+	m_computeCommandQueue->ExecuteCommandLists(_countof(ppComputeCommandLists), ppComputeCommandLists);
+
 	//compute Shader end
 
+	
 	DX::ThrowIfFailed(m_deviceResources->GetCommandAllocator()->Reset());
 
 	// Die Befehlsliste kann jederzeit zurückgesetzt werden, nachdem "ExecuteCommandList()" aufgerufen wurde.
@@ -774,9 +780,10 @@ bool Sample3DSceneRenderer::Render()
 
 	DX::ThrowIfFailed(m_commandList->Close());
 
-	// Befehlsliste ausführen.
-	ID3D12CommandList* ppCommandLists[] = { m_computeCommandList.Get(),  m_commandList.Get() };
+	// Befehlsliste ausführen.	
+	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
 	m_deviceResources->GetCommandQueue()->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
 
 	return true;
 }

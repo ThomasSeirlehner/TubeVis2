@@ -43,6 +43,7 @@ namespace TubeVis2
 		// Direct3D-Ressourcen für Würfelgeometrie.
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>	m_commandList;
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>	m_computeCommandList;
+		Microsoft::WRL::ComPtr<ID3D12CommandQueue>			m_computeCommandQueue;
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator>		m_computeCommandAllocator;
 		Microsoft::WRL::ComPtr<ID3D12Resource>				m_mkBuffer;
 		Microsoft::WRL::ComPtr<ID3D12Resource>				m_mUniformBuffer;

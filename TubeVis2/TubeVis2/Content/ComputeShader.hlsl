@@ -12,7 +12,7 @@ cbuffer MatricesAndUserInput : register(b0)
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 coord = int2(DTid.xy);
-    int3 imgSize = int3(kBufferInfo.xyz);
+    int3 imgSize = int3(1, 2, 3); //int3(kBufferInfo.xyz);
 
     if (coord.x >= imgSize.x || coord.y >= imgSize.y)
         return;
@@ -20,6 +20,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     for (int i = 0; i < imgSize.z; ++i)
     {
         uint index = coord.x + coord.y * imgSize.x + i * (imgSize.x * imgSize.y);
-        kBuffer[index] = uint2(0xFFFFFFFFu, 0xFFFFFFFFu);;
+        kBuffer[index] = uint2(0xFFFFFFFFu, 0xFFFFFFFFu);
     }
 }
