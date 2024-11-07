@@ -56,11 +56,14 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 	// Stammsignatur mit einem einzelnen konstanten Pufferslot erstellen.
 	{
-		CD3DX12_DESCRIPTOR_RANGE range;
-		CD3DX12_ROOT_PARAMETER parameter;
+		CD3DX12_DESCRIPTOR_RANGE range[2];
+		CD3DX12_ROOT_PARAMETER parameters[2];
 
-		range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-		parameter.InitAsDescriptorTable(1, &range, D3D12_SHADER_VISIBILITY_VERTEX);
+		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+		range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+
+		parameters[0].InitAsDescriptorTable(1, &range[0], D3D12_SHADER_VISIBILITY_VERTEX);
+		parameters[1].InitAsDescriptorTable(1, &range[1], D3D12_SHADER_VISIBILITY_ALL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | // Nur der Eingabeassemblerzustand benötigt Zugriff auf den Konstantenpuffer.
@@ -70,7 +73,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
 		CD3DX12_ROOT_SIGNATURE_DESC descRootSignature;
-		descRootSignature.Init(1, &parameter, 0, nullptr, rootSignatureFlags);
+		descRootSignature.Init(_countof(parameters), parameters, 0, nullptr, rootSignatureFlags);
 
 		ComPtr<ID3DBlob> pSignature;
 		ComPtr<ID3DBlob> pError;
@@ -82,11 +85,13 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 	// compute pipeline root signature
 	{
 		// 1. Define the root parameters
+		CD3DX12_DESCRIPTOR_RANGE ranges[1];
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 		CD3DX12_ROOT_PARAMETER rootParameters[2];
 		//CD3DX12_DESCRIPTOR_RANGE uavRange;
 		//uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
-		rootParameters[0].InitAsUnorderedAccessView(0);
-		rootParameters[1].InitAsConstants(4, 0);
+		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[1].InitAsConstantBufferView(0);
 
 		// 2. Create the root signature description
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
@@ -177,10 +182,18 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 		// Describe and create a committed resource for the buffer
 		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(kBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		D3D12_RESOURCE_DESC bufferDesc = {};
+		bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		bufferDesc.Width = kBufferSize;
+		bufferDesc.Height = 1;
+		bufferDesc.DepthOrArraySize = 1;
+		bufferDesc.MipLevels = 1;
+		bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+		bufferDesc.SampleDesc.Count = 1;
+		bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		
-		
-		HRESULT hr = d3dDevice->CreateCommittedResource(
+		d3dDevice->CreateCommittedResource(
 			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
 			&bufferDesc,
@@ -188,10 +201,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			nullptr,
 			IID_PPV_ARGS(&m_mkBuffer)
 		);
-		if (FAILED(hr))
-		{
-			// Handle error
-		}
 
 		
 		const UINT constantBufferSize = (sizeof(matrices_and_user_input) + 255) & ~255; // Round up to nearest 256 bytes
@@ -201,7 +210,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 		// Create the constant buffer
 
-		hr = d3dDevice->CreateCommittedResource(
+		d3dDevice->CreateCommittedResource(
 			&heapPropsUp,
 			D3D12_HEAP_FLAG_NONE,
 			&bufferDescUP,
@@ -209,12 +218,6 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			nullptr,
 			IID_PPV_ARGS(&m_mUniformBuffer)
 		);
-
-		if (FAILED(hr))
-		{
-			// Handle error
-			return;
-		}
 
 		// Create a UAV descriptor for the buffer
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -226,19 +229,40 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		uavDesc.Buffer.CounterOffsetInBytes = 0;
 		uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 
-		ComPtr<ID3D12DescriptorHeap> uavDescriptorHeap;
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.NumElements = static_cast<UINT>(kBufferSize / sizeof(uint32_t));
+		srvDesc.Buffer.StructureByteStride = 0;
+		srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 
-		D3D12_DESCRIPTOR_HEAP_DESC uavHeapDesc = {};
-		uavHeapDesc.NumDescriptors = 1; // Adjust this number based on how many UAVs you need
+		
+
+		/*D3D12_DESCRIPTOR_HEAP_DESC uavHeapDesc = {};
+		uavHeapDesc.NumDescriptors = 2; // Adjust this number based on how many UAVs you need
 		uavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		uavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		uavHeapDesc.NodeMask = 0;
+		uavHeapDesc.NodeMask = 0;*/
 
-		d3dDevice->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&uavDescriptorHeap));
+		// Erstellt einen Deskriptorheap für die Konstantenpuffer.
 		
-		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = uavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+		heapDesc.NumDescriptors = DX::c_frameCount + 2;
+		heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		// Diese Kennzeichnung gibt an, dass dieser Deskriptorheap an die Pipeline gebunden werden kann, und dass die darin enthaltenen Deskriptoren von einer Stammtabelle referenziert werden können.
+		heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		DX::ThrowIfFailed(d3dDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_cbvHeap)));
+
+		NAME_D3D12_OBJECT(m_cbvHeap);
+		
+
+		//d3dDevice->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&m_uavDescriptorHeap));
+		
+		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = m_cbvHeap->GetCPUDescriptorHandleForHeapStart();
 
 		d3dDevice->CreateUnorderedAccessView(m_mkBuffer.Get(), nullptr, &uavDesc, uavHandle);
+		d3dDevice->CreateShaderResourceView(m_mkBuffer.Get(), &srvDesc, uavHandle);
 
 		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
 		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
@@ -368,17 +392,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 			m_commandList->ResourceBarrier(1, &indexBufferResourceBarrier);
 		}
 
-		// Erstellt einen Deskriptorheap für die Konstantenpuffer.
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-			heapDesc.NumDescriptors = DX::c_frameCount;
-			heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			// Diese Kennzeichnung gibt an, dass dieser Deskriptorheap an die Pipeline gebunden werden kann, und dass die darin enthaltenen Deskriptoren von einer Stammtabelle referenziert werden können.
-			heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			DX::ThrowIfFailed(d3dDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_cbvHeap)));
-
-			NAME_D3D12_OBJECT(m_cbvHeap);
-		}
+		
 
 		CD3DX12_RESOURCE_DESC constantBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(DX::c_frameCount * c_alignedConstantBufferSize);
 		DX::ThrowIfFailed(d3dDevice->CreateCommittedResource(
@@ -699,7 +713,7 @@ bool Sample3DSceneRenderer::Render()
 	uni.mkBufferInfo = XMFLOAT4(outputSize.Width, outputSize.Height, 16, 0);
 	//compute Shader part:
 
-	DX::ThrowIfFailed(m_computeCommandAllocator->Reset());
+	//DX::ThrowIfFailed(m_computeCommandAllocator->Reset());
 
 	DX::ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
 	
@@ -713,8 +727,14 @@ bool Sample3DSceneRenderer::Render()
 		m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 		m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
 
-		m_computeCommandList->SetComputeRootConstantBufferView(0, m_mUniformBuffer->GetGPUVirtualAddress());
-		m_computeCommandList->SetComputeRootUnorderedAccessView(1, m_mkBuffer->GetGPUVirtualAddress());
+		ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get()};
+		m_computeCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+		CD3DX12_GPU_DESCRIPTOR_HANDLE additionalHandle(m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+		m_computeCommandList->SetComputeRootDescriptorTable(0, additionalHandle);
+
+		m_computeCommandList->SetComputeRootConstantBufferView(1, m_mUniformBuffer->GetGPUVirtualAddress());
+		//m_computeCommandList->SetComputeRootUnorderedAccessView(1, m_mkBuffer->GetGPUVirtualAddress());
 
 		// Dispatch the compute shader
 		
@@ -739,14 +759,23 @@ bool Sample3DSceneRenderer::Render()
 
 	PIXBeginEvent(m_commandList.Get(), 0, L"Draw the cube");
 	{
+		m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+			m_mkBuffer.Get(),
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+		));
+
 		// Die von diesem Frame verwendete Grafikstammsignatur und die Deskriptorheaps festlegen.
 		m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-		ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get() };
+		ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get()};
 		m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 		// Bindet den Konstantenpuffer des aktuellen Frames an die Pipeline.
 		CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_cbvHeap->GetGPUDescriptorHandleForHeapStart(), m_deviceResources->GetCurrentFrameIndex(), m_cbvDescriptorSize);
 		m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+
+		/* additionalHandle(m_uavDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		m_commandList->SetGraphicsRootDescriptorTable(1, additionalHandle);*/
 
 		// Viewport- und Scherenrechteck festlegen.
 		D3D12_VIEWPORT viewport = m_deviceResources->GetScreenViewport();

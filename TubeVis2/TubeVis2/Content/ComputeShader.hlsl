@@ -12,7 +12,7 @@ cbuffer MatricesAndUserInput : register(b0)
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 coord = int2(DTid.xy);
-    int3 imgSize = int3(1, 2, 3); //int3(kBufferInfo.xyz);
+    int3 imgSize = int3(kBufferInfo.xyz);
 
     if (coord.x >= imgSize.x || coord.y >= imgSize.y)
         return;

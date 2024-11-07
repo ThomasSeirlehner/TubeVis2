@@ -5,6 +5,8 @@ cbuffer ModelViewProjectionConstantBuffer : register(b0)
 	matrix projection;
 };
 
+StructuredBuffer<uint2> inputBuffer : register(t0);
+
 struct VertexShaderInput
 {
 	float3 pos : POSITION;

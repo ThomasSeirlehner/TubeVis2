@@ -6,5 +6,6 @@ struct PixelShaderInput
 
 float4 main(PixelShaderInput input) : SV_TARGET
 {
-	return float4(input.color, 1.0f);
+    float2 pixelPosition = input.pos.xy;
+    return float4(input.pos.xyz/1080, 1.0f);
 }
