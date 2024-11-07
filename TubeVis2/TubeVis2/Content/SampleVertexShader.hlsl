@@ -29,7 +29,7 @@ PixelShaderInput main(VertexShaderInput input)
 	pos = mul(pos, projection);
 	output.pos = pos;
 
-	output.color = input.color;
+    output.color = float3(inputBuffer[0], 0.0);
 
 	return output;
 }

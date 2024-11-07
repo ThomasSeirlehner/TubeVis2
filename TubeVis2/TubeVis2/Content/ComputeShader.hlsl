@@ -20,6 +20,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     for (int i = 0; i < imgSize.z; ++i)
     {
         uint index = coord.x + coord.y * imgSize.x + i * (imgSize.x * imgSize.y);
-        kBuffer[index] = uint2(0xFFFFFFFFu, 0xFFFFFFFFu);
+        
     }
+    kBuffer[0] = uint2(1, 1);
 }

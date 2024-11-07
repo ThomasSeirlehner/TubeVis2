@@ -259,10 +259,17 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 
 		//d3dDevice->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&m_uavDescriptorHeap));
 		
-		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = m_cbvHeap->GetCPUDescriptorHandleForHeapStart();
+		/*D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = m_cbvHeap->GetCPUDescriptorHandleForHeapStart();
 
 		d3dDevice->CreateUnorderedAccessView(m_mkBuffer.Get(), nullptr, &uavDesc, uavHandle);
-		d3dDevice->CreateShaderResourceView(m_mkBuffer.Get(), &srvDesc, uavHandle);
+		d3dDevice->CreateShaderResourceView(m_mkBuffer.Get(), &srvDesc, uavHandle);*/
+
+		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = m_cbvHeap->GetCPUDescriptorHandleForHeapStart();
+		D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = uavHandle;
+		srvHandle.ptr += d3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		d3dDevice->CreateUnorderedAccessView(m_mkBuffer.Get(), nullptr, &uavDesc, uavHandle);
+		d3dDevice->CreateShaderResourceView(m_mkBuffer.Get(), &srvDesc, srvHandle);
 
 		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
 		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
@@ -734,13 +741,20 @@ bool Sample3DSceneRenderer::Render()
 		m_computeCommandList->SetComputeRootDescriptorTable(0, additionalHandle);
 
 		m_computeCommandList->SetComputeRootConstantBufferView(1, m_mUniformBuffer->GetGPUVirtualAddress());
-		//m_computeCommandList->SetComputeRootUnorderedAccessView(1, m_mkBuffer->GetGPUVirtualAddress());
 
 		// Dispatch the compute shader
 		
 		UINT dispatchX = (outputSize.Width + 15) / 16;
 		UINT dispatchY = (outputSize.Height + 15) / 16;
 		m_computeCommandList->Dispatch(dispatchX, dispatchY, 1);
+
+		m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+			m_mkBuffer.Get(),
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+		));
+
+
 	}
 	PIXEndEvent(m_computeCommandList.Get());
 
@@ -759,11 +773,6 @@ bool Sample3DSceneRenderer::Render()
 
 	PIXBeginEvent(m_commandList.Get(), 0, L"Draw the cube");
 	{
-		m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-			m_mkBuffer.Get(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-		));
 
 		// Die von diesem Frame verwendete Grafikstammsignatur und die Deskriptorheaps festlegen.
 		m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
