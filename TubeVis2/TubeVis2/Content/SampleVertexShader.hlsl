@@ -5,7 +5,7 @@ cbuffer ModelViewProjectionConstantBuffer : register(b0)
 	matrix projection;
 };
 
-StructuredBuffer<uint2> inputBuffer : register(t0);
+
 
 struct VertexShaderInput
 {
@@ -29,7 +29,7 @@ PixelShaderInput main(VertexShaderInput input)
 	pos = mul(pos, projection);
 	output.pos = pos;
 
-    output.color = float3(inputBuffer[0], 0.0);
+    output.color = float3(input.color);
 
 	return output;
 }

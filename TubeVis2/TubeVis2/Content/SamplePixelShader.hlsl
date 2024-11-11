@@ -4,9 +4,14 @@ struct PixelShaderInput
 	float3 color : COLOR0;
 };
 
+StructuredBuffer<uint2> inputBuffer : register(t0);
+
 float4 main(PixelShaderInput input) : SV_TARGET
 {
     float2 pixelPosition = input.pos.xy;
-    //return float4(input.pos.xyz/1080, 1.0f);
-    return float4(input.color, 1.0f);
+    
+    float2 buffer = inputBuffer[0];
+    
+    return float4(buffer.x, buffer.y, 0.0f, 1.0f);
+
 }
