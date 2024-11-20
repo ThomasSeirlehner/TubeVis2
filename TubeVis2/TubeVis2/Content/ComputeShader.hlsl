@@ -1,26 +1,30 @@
-#define WORKGROUP_SIZE 16
+#define WORKGROUP_SIZE 1
 
-// represents 2 times uint_32
 RWStructuredBuffer<uint2> kBuffer : register(u0);
 
 cbuffer MatricesAndUserInput : register(b0)
 {
-    float4 kBufferInfo;
+    float4 kBufferInfo; // x: width, y: height, z: depth, w: unused
 };
 
-[numthreads(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)]
+[numthreads(1, WORKGROUP_SIZE, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    int2 coord = int2(DTid.xy);
-    int3 imgSize = int3(kBufferInfo.xyz);
+    
+    uint2 coord = DTid.xy;
+    uint3 imgSize = uint3(kBufferInfo.xyz);
 
     if (coord.x >= imgSize.x || coord.y >= imgSize.y)
         return;
 
-    for (int i = 0; i < imgSize.z; ++i)
+    uint baseIndex = coord.y * imgSize.x + coord.x;
+
+    for (uint i = 0; i < imgSize.z; ++i)
     {
-        uint index = coord.x + coord.y * imgSize.x + i * (imgSize.x * imgSize.y);
+        uint index = baseIndex + i * (imgSize.x * imgSize.y);
         
+        // Example computation: set each element to its index and depth
+        kBuffer[index] = uint2(index, i);
     }
-    kBuffer[0] = uint2(1, 1);
+
 }

@@ -52,6 +52,7 @@ namespace TubeVis2
 		Microsoft::WRL::ComPtr<ID3D12PipelineState>			m_pipelineState;
 		Microsoft::WRL::ComPtr<ID3D12PipelineState>			m_computePipelineState;
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_cbvHeap;
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_srvUavHeap;
 		//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>		m_uavDescriptorHeap;
 		Microsoft::WRL::ComPtr<ID3D12Resource>				m_vertexBuffer;
 		Microsoft::WRL::ComPtr<ID3D12Resource>				m_indexBuffer;
