@@ -1,8 +1,14 @@
+// Pixel Shader
+
+cbuffer PixelShaderConstants : register(b0)
+{
+    float4 mkBufferInfo; // x: width, y: height, z: depth, w: unused
+}
+
 struct PixelShaderInput
 {
     float4 pos : SV_POSITION;
     float3 color : COLOR0;
-    //float3 computeColor : COLOR1;
 };
 
 StructuredBuffer<uint2> computeBuffer : register(t0);
@@ -10,22 +16,16 @@ StructuredBuffer<uint2> computeBuffer : register(t0);
 float4 main(PixelShaderInput input) : SV_TARGET
 {
     uint2 pixelPosition = uint2(input.pos.xy);
+    uint index = uint(input.pos.y) * uint(mkBufferInfo.x) + uint(input.pos.x);
     
-    // Calculate index based on pixel position
-    //uint index = pixelPosition.y * 1920 + pixelPosition.x; // Adjust width as needed
-    
-    // Read data from compute buffer
-    //uint2 computeData = uint2(input.computeColor.x, input.computeColor.y);
-    
-    // Normalize and create color from compute data (example logic)
     float3 computeColor = float3(
-        float(computeBuffer[1].x),
-        float(computeBuffer[1].y),
-        0.0 // Or some other value based on your logic
+        float(computeBuffer[index].x),
+        float(computeBuffer[index].y),
+        0.0
     );
     
-    // Blend with vertex color
-    float3 finalColor =  computeColor;
+    // Blend with vertex color or use compute color directly
+    float3 finalColor = computeColor;
     
-    return float4(finalColor, 1.0); // Output final color
+    return float4(finalColor, 1.0);
 }

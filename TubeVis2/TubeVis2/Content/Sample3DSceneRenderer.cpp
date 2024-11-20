@@ -77,15 +77,16 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		CD3DX12_DESCRIPTOR_RANGE range[3];
 		CD3DX12_ROOT_PARAMETER parameters[3];
 
-		// CBV for constant buffer
+		// CBV for vertex shader
 		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-		// SRV for vertex shader
-		range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-		// SRV for pixel shader (if needed)
-		range[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-
 		parameters[0].InitAsDescriptorTable(1, &range[0], D3D12_SHADER_VISIBILITY_VERTEX);
-		parameters[1].InitAsDescriptorTable(1, &range[1], D3D12_SHADER_VISIBILITY_VERTEX);
+
+		// CBV for pixel shader
+		range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+		parameters[1].InitAsDescriptorTable(1, &range[1], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		// SRV for pixel shader (compute buffer)
+		range[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 		parameters[2].InitAsDescriptorTable(1, &range[2], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -109,8 +110,7 @@ void Sample3DSceneRenderer::CreateDeviceDependentResources()
 		CD3DX12_DESCRIPTOR_RANGE ranges[1];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
 		CD3DX12_ROOT_PARAMETER rootParameters[2];
-		//CD3DX12_DESCRIPTOR_RANGE uavRange;
-		//uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
 		rootParameters[1].InitAsConstantBufferView(0);
 
@@ -773,8 +773,15 @@ bool Sample3DSceneRenderer::Render()
 		
 	UINT dispatchX = (outputSize.Width + 15) / 16;
 	UINT dispatchY = (outputSize.Height + 15) / 16;
-	m_computeCommandList->Dispatch(1, 1, 1);
+	m_computeCommandList->Dispatch(16, 16, 1);
 
+	PIXEndEvent(m_computeCommandList.Get());
+
+	DX::ThrowIfFailed(m_computeCommandList->Close());
+	// Transition the m_mkBuffer from UAV to SRV
+	ID3D12CommandList* ppComputeCommandLists[] = { m_computeCommandList.Get() };
+	m_computeCommandQueue->ExecuteCommandLists(_countof(ppComputeCommandLists), ppComputeCommandLists);
+	
 	const UINT64 fenceValueForSignal = m_computeFenceValue;
 	DX::ThrowIfFailed(m_computeCommandQueue->Signal(m_computeFence.Get(), fenceValueForSignal));
 	m_computeFenceValue++;
@@ -783,44 +790,21 @@ bool Sample3DSceneRenderer::Render()
 	if (m_computeFence->GetCompletedValue() < fenceValueForSignal)
 	{
 		DX::ThrowIfFailed(m_computeFence->SetEventOnCompletion(fenceValueForSignal, m_computeFenceEvent));
-		WaitForSingleObjectEx(m_computeFenceEvent, INFINITE, FALSE);
+		WaitForSingleObject(m_computeFenceEvent, INFINITE);
 	}
 
-	// Transition the m_mkBuffer from UAV to SRV
-	m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-		m_mkBuffer.Get(),
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-	));
-	
-
-
-	
-	PIXEndEvent(m_computeCommandList.Get());
-
-	DX::ThrowIfFailed(m_computeCommandList->Close());
-
-	ID3D12CommandList* ppComputeCommandLists[] = { m_computeCommandList.Get() };
-	m_computeCommandQueue->ExecuteCommandLists(_countof(ppComputeCommandLists), ppComputeCommandLists);
-
-	//compute Shader end
-	if (m_computeFence->GetCompletedValue() < fenceValueForSignal)
-	{
-		DX::ThrowIfFailed(m_computeFence->SetEventOnCompletion(fenceValueForSignal, m_computeFenceEvent));
-		WaitForSingleObjectEx(m_computeFenceEvent, INFINITE, FALSE);
-	}
-	
-	DX::ThrowIfFailed(m_deviceResources->GetCommandAllocator()->Reset());
-
+	DX::ThrowIfFailed(m_computeCommandAllocator->Reset());
 	// Die Befehlsliste kann jederzeit zurückgesetzt werden, nachdem "ExecuteCommandList()" aufgerufen wurde.
 	DX::ThrowIfFailed(m_commandList->Reset(m_deviceResources->GetCommandAllocator(), m_pipelineState.Get()));
+
+
 
 	PIXBeginEvent(m_commandList.Get(), 0, L"Draw the cube");
 	{
 
 		// Die von diesem Frame verwendete Grafikstammsignatur und die Deskriptorheaps festlegen.
 		m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-		ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get()};
+		ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get() };
 		m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 		D3D12_VIEWPORT viewport = m_deviceResources->GetScreenViewport();
@@ -828,9 +812,13 @@ bool Sample3DSceneRenderer::Render()
 		m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
 		m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
-		m_commandList->SetGraphicsRootDescriptorTable(1, CD3DX12_GPU_DESCRIPTOR_HANDLE(m_cbvHeap->GetGPUDescriptorHandleForHeapStart(), DX::c_frameCount, m_cbvDescriptorSize));
-		m_commandList->SetGraphicsRootDescriptorTable(2, CD3DX12_GPU_DESCRIPTOR_HANDLE(m_cbvHeap->GetGPUDescriptorHandleForHeapStart(), DX::c_frameCount + 1, m_cbvDescriptorSize));
-
+		m_commandList->SetGraphicsRootDescriptorTable(1, CD3DX12_GPU_DESCRIPTOR_HANDLE(m_cbvHeap->GetGPUDescriptorHandleForHeapStart(), 1, m_cbvDescriptorSize));
+		m_commandList->SetGraphicsRootDescriptorTable(2, CD3DX12_GPU_DESCRIPTOR_HANDLE(m_cbvHeap->GetGPUDescriptorHandleForHeapStart(), 2, m_cbvDescriptorSize));
+		m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+			m_mkBuffer.Get(),
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+		));
 		// Angeben, dass diese Ressource als Renderziel verwendet wird.
 		CD3DX12_RESOURCE_BARRIER renderTargetResourceBarrier =
 			CD3DX12_RESOURCE_BARRIER::Transition(m_deviceResources->GetRenderTarget(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -844,16 +832,16 @@ bool Sample3DSceneRenderer::Render()
 
 		m_commandList->OMSetRenderTargets(1, &renderTargetView, false, &depthStencilView);
 
+
 		m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
 		m_commandList->IASetIndexBuffer(&m_indexBufferView);
+		
+		//m_commandList->SetGraphicsRootDescriptorTable(2, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+
 		m_commandList->DrawIndexedInstanced(36, 1, 0, 0, 0);
 
-		m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-			m_mkBuffer.Get(),
-			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-		));
+
 
 		// Angeben, dass das Renderziel nicht zum Präsentieren verwendet wird, wenn die Ausführung der Befehlsliste beendet ist.
 		CD3DX12_RESOURCE_BARRIER presentResourceBarrier =
@@ -867,7 +855,6 @@ bool Sample3DSceneRenderer::Render()
 	// Befehlsliste ausführen.	
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
 	m_deviceResources->GetCommandQueue()->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
 
 	return true;
 }
